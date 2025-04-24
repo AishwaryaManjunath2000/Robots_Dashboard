@@ -1,13 +1,24 @@
 Papa.parse("robots.csv", {
     download: true,
-    header: true,
+    skipEmptyLines: true,
     complete: function(results) {
-      const data = results.data;
+      // Skip the first descriptive header row
+      const headers = results.data[1];
+      const rows = results.data.slice(2);
+  
+      const data = rows.map(row => {
+        const robot = {};
+        headers.forEach((header, i) => {
+          robot[header] = row[i];
+        });
+        return robot;
+      });
+  
       const container = document.getElementById("dashboard");
       const searchInput = document.getElementById("search");
   
       function displayData(filteredData) {
-        container.innerHTML = ""; // Clear previous results
+        container.innerHTML = "";
   
         filteredData.forEach(robot => {
           const div = document.createElement("div");
@@ -16,7 +27,7 @@ Papa.parse("robots.csv", {
           div.innerHTML = `
             <h2>${robot.Name}</h2>
             <p><strong>Manufacturer:</strong> ${robot.Manufacturer}</p>
-            <p><strong>Price:</strong> ${robot.Price}</p>
+            <p><strong>Price:</strong> ${robot["Price "] || "N/A"}</p>
             <p><strong>Set Available:</strong> ${robot["Set Available"]} (${robot["Set size"]})</p>
             <a href="${robot["Purchase Website"]}" target="_blank">More Info</a>
           `;
@@ -24,15 +35,13 @@ Papa.parse("robots.csv", {
         });
       }
   
-      // Display all data by default
       displayData(data);
   
-      // Search filter
       searchInput.addEventListener("input", function () {
         const query = searchInput.value.toLowerCase();
         const filtered = data.filter(robot =>
-          robot.Name.toLowerCase().includes(query) ||
-          robot.Manufacturer.toLowerCase().includes(query)
+          robot.Name?.toLowerCase().includes(query) ||
+          robot.Manufacturer?.toLowerCase().includes(query)
         );
         displayData(filtered);
       });
