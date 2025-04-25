@@ -32,4 +32,42 @@ body {
   .robot-card h2 {
     margin-top: 0;
   }
+  .robot-card details {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #ccc;
+  }
+  
+  .robot-card summary {
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 0.3rem;
+  }
+  
+  .robot-card a {
+    color: #5e2ca5;
+    text-decoration: none;
+  }
+  
+  .robot-card a:hover {
+    text-decoration: underline;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 0.5rem;
+  }
+  
+  details[open] summary::after {
+    content: "▲";
+    float: right;
+    margin-left: 5px;
+  }
+  
+  details summary::after {
+    content: "▼";
+    float: right;
+    margin-left: 5px;
+  }
+  
   
