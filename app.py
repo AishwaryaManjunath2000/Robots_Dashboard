@@ -1,7 +1,17 @@
 import streamlit as st
 import pandas as pd
 
+# --- Page config ---
 st.set_page_config(page_title="Busy Teachers Guide to Robots", layout="wide")
+
+# --- Load custom CSS from style.css ---
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+local_css("style.css")
+
+# --- Title ---
 st.title("📘 Busy Teachers Guide to Robots")
 
 # --- Load data ---
@@ -9,110 +19,102 @@ sheet_url = "https://docs.google.com/spreadsheets/d/1I4r5mQm3Fwn39bKVYGHB3qXFn1s
 df_raw = pd.read_csv(sheet_url, skiprows=1)
 df_raw.columns = df_raw.columns.str.strip()
 
-# Validate required columns
-required_cols = ["Name", "Manufacturer"]
-missing_cols = [col for col in required_cols if col not in df_raw.columns]
-if missing_cols:
-    st.error(f"❌ Sheet missing required columns: {missing_cols}")
+# --- Validate columns ---
+if "Name" not in df_raw.columns or "Manufacturer" not in df_raw.columns:
+    st.error("❌ Sheet missing required columns: 'Name' and 'Manufacturer'")
     st.stop()
 
-# Drop rows with missing required fields
 df_raw = df_raw.dropna(subset=["Name", "Manufacturer"]).copy()
 
-# Normalize grades for sorting
-def grade_sort_key(grade):
-    if grade == "PK": return -2
-    if grade == "K": return -1
-    try:
-        return int(grade)
-    except:
-        return 100  # unknowns at end
-
-# Sidebar filters
+# --- Sidebar Filters ---
 st.sidebar.header("🔍 Filter Options")
 search = st.sidebar.text_input("Search name or manufacturer")
 
-manufacturers = sorted(df_raw["Manufacturer"].dropna().unique())
-manufacturer_filter = st.sidebar.selectbox("Manufacturer", ["All"] + manufacturers)
+manufacturer_options = ["All"] + sorted(df_raw["Manufacturer"].dropna().unique())
+selected_manufacturer = st.sidebar.selectbox("Manufacturer", manufacturer_options)
 
-grades = sorted(df_raw["Min Grade Level"].dropna().unique(), key=grade_sort_key)
-grade_filter = st.sidebar.multiselect("Min Grade Level", grades)
+grade_levels = df_raw["Min Grade Level"].dropna().unique()
+grade_levels = sorted(grade_levels, key=lambda x: ("PK" if x == "PK" else "K" if x == "K" else x))
+selected_grades = st.sidebar.multiselect("Min Grade Level", grade_levels)
 
-rechargeable_filter = st.sidebar.radio("Rechargeable?", ["Yes", "No"])
+rechargeable_choice = st.sidebar.selectbox("Rechargeable?", ["All", "Yes", "No"])
+availability_filter = st.sidebar.checkbox("Available at WWU's EduToyPia only")
 
-availability_filter = st.sidebar.checkbox("Available at WWU's EduToyPia only", value=False)
+# Price and Age sliders
+price_col = pd.to_numeric(df_raw["Price"].str.replace("$", "", regex=False), errors='coerce')
+age_col = pd.to_numeric(df_raw["Min Age"], errors='coerce')
 
-# Convert Price and Min Age for sliders
-df_raw["Price"] = pd.to_numeric(df_raw["Price"].replace("\$", "", regex=True), errors="coerce")
-df_raw["Min Age"] = pd.to_numeric(df_raw["Min Age"], errors="coerce")
-
-min_price, max_price = int(df_raw["Price"].min()), int(df_raw["Price"].max())
+min_price, max_price = int(price_col.min()), int(price_col.max())
 price_range = st.sidebar.slider("Price Range", min_price, max_price, (min_price, max_price))
 
-min_age, max_age = int(df_raw["Min Age"].min()), int(df_raw["Min Age"].max())
+min_age, max_age = int(age_col.min()), int(age_col.max())
 age_range = st.sidebar.slider("Minimum Age", min_age, max_age, (min_age, max_age))
 
-sort_by = st.sidebar.selectbox("Sort By", ["Price", "Min Age", "Name"])
+# Sorting
+sort_options = ["Price", "Min Age", "Name"]
+sort_by = st.sidebar.selectbox("Sort By", sort_options)
 
-# Filter logic
+# --- Filtering Logic ---
 filtered = df_raw.copy()
 
 if search:
-    filtered = filtered[filtered["Name"].str.contains(search, case=False, na=False) |
-                        filtered["Manufacturer"].str.contains(search, case=False, na=False)]
+    filtered = filtered[
+        filtered["Name"].str.contains(search, case=False, na=False) |
+        filtered["Manufacturer"].str.contains(search, case=False, na=False)
+    ]
 
-if manufacturer_filter != "All":
-    filtered = filtered[filtered["Manufacturer"] == manufacturer_filter]
+if selected_manufacturer != "All":
+    filtered = filtered[filtered["Manufacturer"] == selected_manufacturer]
 
-if grade_filter:
-    filtered = filtered[filtered["Min Grade Level"].isin(grade_filter)]
+if selected_grades:
+    filtered = filtered[filtered["Min Grade Level"].isin(selected_grades)]
 
-filtered = filtered[filtered["Rechargeable"] == rechargeable_filter]
+if rechargeable_choice != "All":
+    filtered = filtered[filtered["Rechargeable"] == rechargeable_choice]
 
 if availability_filter:
     filtered = filtered[filtered["Set Available"] == "Yes"]
 
-filtered = filtered[(filtered["Price"] >= price_range[0]) & (filtered["Price"] <= price_range[1])]
-filtered = filtered[(filtered["Min Age"] >= age_range[0]) & (filtered["Min Age"] <= age_range[1])]
+# Price filtering
+filtered["_price"] = price_col
+filtered = filtered[(filtered["_price"] >= price_range[0]) & (filtered["_price"] <= price_range[1])]
 
-# Sorting
-if sort_by == "Min Age":
-    filtered = filtered.sort_values(by="Min Age")
-elif sort_by == "Price":
-    filtered = filtered.sort_values(by="Price")
+# Age filtering
+filtered["_age"] = age_col
+filtered = filtered[(filtered["_age"] >= age_range[0]) & (filtered["_age"] <= age_range[1])]
+
+# Sort
+if sort_by == "Price":
+    filtered = filtered.sort_values(by="_price")
+elif sort_by == "Min Age":
+    filtered = filtered.sort_values(by="_age")
 else:
     filtered = filtered.sort_values(by="Name")
 
+# --- Display Results ---
 st.markdown(f"### Showing {len(filtered)} matching robots")
 
 cols = st.columns(2)
 
 for i, (_, row) in enumerate(filtered.iterrows()):
     with cols[i % 2]:
-        with st.container():
-            st.markdown("""
-                <div style="border:1px solid #ccc; padding:1rem; border-radius:8px; margin-bottom:1rem; background-color: #f9f9f9">
-                    <h4>{}</h4>
-                    <p><strong>Manufacturer:</strong> {}</p>
-                    <p><strong>Price:</strong> ${}</p>
-                    <p><strong>Min Grade:</strong> {} | <strong>Age:</strong> {}</p>
-                    <p><strong>Rechargeable:</strong> {}</p>
-                </div>
-            """.format(
-                row["Name"],
-                row["Manufacturer"],
-                row.get("Price", "N/A"),
-                row.get("Min Grade Level", "N/A"),
-                row.get("Min Age", "N/A"),
-                row.get("Rechargeable", "N/A")
-            ), unsafe_allow_html=True)
-
-            with st.expander("📘 More Details"):
-                st.write(f"**Set Available:** {row.get('Set Available', 'N/A')} ({row.get('Set size', 'N/A')})")
-                st.write(f"**Max Users:** {row.get('Max Users', 'N/A')}")
-                st.write(f"**Auditory Cues:** {row.get('Auditory Accessibility', 'N/A')}")
-                st.write(f"**Visual Cues:** {row.get('Visual Accessibility', 'N/A')}")
-                st.write(f"**Device Required:** {row.get('Device Required', 'N/A')}")
-                st.write(f"**Description:** {row.get('Description', 'N/A')}")
-                st.markdown(f"[🔗 Purchase Link]({row.get('Purchase Website', '#')})")
-                st.markdown(f"[🏭 Manufacturer]({row.get('Manfacturer Website', '#')})")
+        st.markdown(f"""
+        <div class="robot-card">
+            <h4 class="robot-title">{row['Name']}</h4>
+            <p><strong>Manufacturer:</strong> {row['Manufacturer']}</p>
+            <p><strong>Price:</strong> {row.get('Price', 'N/A')}</p>
+            <p><strong>Min Grade:</strong> {row.get('Min Grade Level', 'N/A')} | <strong>Age:</strong> {row.get('Min Age', 'N/A')}</p>
+            <p><strong>Rechargeable:</strong> {row.get('Rechargeable', 'N/A')}</p>
+            <details>
+                <summary>📘 More Details</summary>
+                <p><strong>Set Available:</strong> {row.get('Set Available', 'N/A')} ({row.get('Set size', 'N/A')})</p>
+                <p><strong>Max Users:</strong> {row.get('Max Users', 'N/A')}</p>
+                <p><strong>Auditory Cues:</strong> {row.get('Auditory Accessibility', 'N/A')}</p>
+                <p><strong>Visual Cues:</strong> {row.get('Visual Accessibility', 'N/A')}</p>
+                <p><strong>Device Required:</strong> {row.get('Device Required', 'N/A')}</p>
+                <p><strong>Description:</strong> {row.get('Description', 'N/A')}</p>
+                <p><a href="{row.get('Purchase Website', '#')}" target="_blank">🔗 Purchase Link</a></p>
+                <p><a href="{row.get('Manfacturer Website', '#')}" target="_blank">🏭 Manufacturer Website</a></p>
+            </details>
+        </div>
+        """, unsafe_allow_html=True)
