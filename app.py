@@ -34,10 +34,11 @@ manufacturer_options = ["All"] + sorted(df_raw["Manufacturer"].dropna().unique()
 selected_manufacturer = st.sidebar.selectbox("Manufacturer", manufacturer_options)
 
 grade_levels = df_raw["Min Grade Level"].dropna().unique()
-grade_levels = sorted(grade_levels, key=lambda x: ("PK" if x == "PK" else "K" if x == "K" else x))
+grade_levels = sorted(grade_levels, key=lambda x: ("0" if x == "PK" else "1" if x == "K" else x))
 selected_grades = st.sidebar.multiselect("Min Grade Level", grade_levels)
 
 rechargeable_choice = st.sidebar.selectbox("Rechargeable?", ["All", "Yes", "No"])
+battery_filter = st.sidebar.selectbox("Needs Batteries?", ["All", "Yes", "No"])
 availability_filter = st.sidebar.checkbox("Available at WWU's EduToyPia only")
 
 # Price and Age sliders
@@ -72,6 +73,9 @@ if selected_grades:
 if rechargeable_choice != "All":
     filtered = filtered[filtered["Rechargeable"] == rechargeable_choice]
 
+if battery_filter != "All":
+    filtered = filtered[filtered["Batteries"] == battery_filter]
+
 if availability_filter:
     filtered = filtered[filtered["Set Available"] == "Yes"]
 
@@ -94,27 +98,29 @@ else:
 # --- Display Results ---
 st.markdown(f"### Showing {len(filtered)} matching robots")
 
-cols = st.columns(2)
+# 3 columns layout
+cols = st.columns(3)
 
 for i, (_, row) in enumerate(filtered.iterrows()):
-    with cols[i % 2]:
+    with cols[i % 3]:
+        image_url = row.get("Image", "https://via.placeholder.com/300x300")
         st.markdown(f"""
-        <div class="robot-card">
-            <h4 class="robot-title">{row['Name']}</h4>
-            <p><strong>Manufacturer:</strong> {row['Manufacturer']}</p>
-            <p><strong>Price:</strong> {row.get('Price', 'N/A')}</p>
-            <p><strong>Min Grade:</strong> {row.get('Min Grade Level', 'N/A')} | <strong>Age:</strong> {row.get('Min Age', 'N/A')}</p>
-            <p><strong>Rechargeable:</strong> {row.get('Rechargeable', 'N/A')}</p>
-            <details>
-                <summary>📘 More Details</summary>
-                <p><strong>Set Available:</strong> {row.get('Set Available', 'N/A')} ({row.get('Set size', 'N/A')})</p>
-                <p><strong>Max Users:</strong> {row.get('Max Users', 'N/A')}</p>
-                <p><strong>Auditory Cues:</strong> {row.get('Auditory Accessibility', 'N/A')}</p>
-                <p><strong>Visual Cues:</strong> {row.get('Visual Accessibility', 'N/A')}</p>
-                <p><strong>Device Required:</strong> {row.get('Device Required', 'N/A')}</p>
-                <p><strong>Description:</strong> {row.get('Description', 'N/A')}</p>
-                <p><a href="{row.get('Purchase Website', '#')}" target="_blank">🔗 Purchase Link</a></p>
-                <p><a href="{row.get('Manfacturer Website', '#')}" target="_blank">🏭 Manufacturer Website</a></p>
+        <div class="robot-card" style="text-align: center;">
+            <img src="{image_url}" alt="{row['Name']} image"
+                 style="width: 100%; height: 250px; object-fit: cover; border-radius: 12px;">
+            <h4 class="robot-title" style="margin-top: 10px;">{row['Name']}</h4>
+            <p style="font-weight: 600; color: #444; margin: 0.2rem 0;">${row.get('Price', 'N/A')}</p>
+            <p style="margin: 0.1rem 0; font-size: 0.9rem; color: #666;">{row['Manufacturer']}</p>
+            <p style="margin: 0.1rem 0; font-size: 0.9rem; color: #666;">Grade: {row.get('Min Grade Level', 'N/A')} | Age: {row.get('Min Age', 'N/A')}</p>
+            <details style="margin-top: 0.5rem;">
+                <summary style="cursor: pointer;">More Info</summary>
+                <p style="font-size: 0.85rem;"><strong>Rechargeable:</strong> {row.get('Rechargeable', 'N/A')}</p>
+                <p style="font-size: 0.85rem;"><strong>Batteries:</strong> {row.get('Batteries', 'N/A')}</p>
+                <p style="font-size: 0.85rem;"><strong>Set Available:</strong> {row.get('Set Available', 'N/A')} ({row.get('Set size', 'N/A')})</p>
+                <p style="font-size: 0.85rem;"><strong>Max Users:</strong> {row.get('Max Users', 'N/A')}</p>
+                <p style="font-size: 0.85rem;"><strong>Device Required:</strong> {row.get('Device Required', 'N/A')}</p>
+                <p style="font-size: 0.85rem;"><strong>Visual Cues:</strong> {row.get('Visual Accessibility', 'N/A')}</p>
+                <p style="font-size: 0.85rem;"><a href="{row.get('Purchase Website', '#')}" target="_blank">🔗 Buy Now</a></p>
             </details>
         </div>
         """, unsafe_allow_html=True)
