@@ -9,15 +9,12 @@ import requests
 from io import BytesIO
 from PIL import Image
 
-
 def wrap_text(text, font_name, font_size, max_width):
     words = text.split()
-    lines = []
-    line = ""
+    lines, line = [], ""
     for word in words:
         test_line = f"{line} {word}".strip()
-        width = stringWidth(test_line, font_name, font_size)
-        if width <= max_width:
+        if stringWidth(test_line, font_name, font_size) <= max_width:
             line = test_line
         else:
             lines.append(line)
@@ -26,105 +23,121 @@ def wrap_text(text, font_name, font_size, max_width):
         lines.append(line)
     return lines
 
+def clean_price(val):
+    if isinstance(val, float):
+        return f"${val:,.2f}"
+    s = str(val).replace("$", "").strip()
+    try:
+        return f"${float(s):,.2f}"
+    except:
+        return "N/A"
 
-def generate_faq_pdf(row, filename="robot_faq_final.pdf"):
+def generate_faq_pdf(row, filename="auto_glance.pdf"):
     c = canvas.Canvas(filename, pagesize=letter)
     width, height = letter
     margin = 40
 
-    # Title
-    c.setFont("Helvetica-Bold", 24)
+    # --- Title ---
+    c.setFont("Helvetica-Bold", 20)
     c.drawString(margin, height - margin, row.get("Name", "Robot Name"))
 
-    # Feature bullets (dynamic)
-    icon_lines = []
-    if row.get("Device Required", "").strip().lower() == "no":
-        icon_lines.append("• No Device Required")
-    if row.get("Does the device rely on AUDITORY cues for interations and functionality?", "").strip().lower() == "no":
-        icon_lines.append("• No Audio Required")
-    if row.get("Visual Accessibility", "").strip().lower() == "no":
-        icon_lines.append("• No Text/Visual Required")
-    
-    # Always included for now
-    icon_lines.append("• Touch Required")
-
-    # Draw feature bullets
-    c.setFont("Helvetica", 10)
-    for i, line in enumerate(icon_lines):
-        c.drawString(margin, height - margin - 30 - (i * 15), line)
-
-    # Robot image
-    image_y = height - margin - 230
-    image_url = row.get("Image", None)
+    # --- Robot Image ---
+    image_url = row.get("Image", "")
     image_path = "robot_temp_img.png"
-
     if image_url:
         try:
-            response = requests.get(image_url, timeout=10)
-            image = Image.open(BytesIO(response.content))
-            image.save(image_path)
-            c.drawImage(image_path, margin, image_y, width=1.6 * inch, height=1.6 * inch, preserveAspectRatio=True)
-            c.drawImage(image_path, width - 2.3 * inch - margin, height - margin - 100,
-                        width=2.3 * inch, height=1.2 * inch, preserveAspectRatio=True)
+            img_data = requests.get(image_url, timeout=10).content
+            img = Image.open(BytesIO(img_data))
+            img.save(image_path)
+            c.drawImage(image_path, margin, height - 250, width=2 * inch, height=2 * inch, preserveAspectRatio=True)
             os.remove(image_path)
         except Exception as e:
-            print("⚠️ Image load failed:", e)
+            print("⚠️ Image failed to load:", e)
 
-    right_x = margin + 250
-    summary_top_y = height - margin - 130
-
-    # Product Summary
-    product_summary = row.get("Description", "This robot teaches coding and sequencing skills.")
+    # --- Product Summary ---
+    summary = row.get("Description", "No summary available.")
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(right_x, summary_top_y, "Product Summary")
+    c.drawString(margin + 2.2 * inch, height - 90, "Product Summary")
     c.setFont("Helvetica", 10)
-    summary_lines = wrap_text(product_summary, "Helvetica", 10, 250)
-    for i, line in enumerate(summary_lines):
-        c.drawString(right_x, summary_top_y - 15 - i * 14, line)
+    lines = wrap_text(summary, "Helvetica", 10, width - margin * 2 - 2.2 * inch)
+    for i, line in enumerate(lines):
+        c.drawString(margin + 2.2 * inch, height - 105 - (i * 14), line)
 
-    # Footer / additional details
-    footer_y = image_y - 20
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(margin, footer_y, "Grade Level:")
-    c.drawString(margin + 100, footer_y, str(row.get("Min Grade Level", "N/A")))
-    c.drawString(margin, footer_y - 15, "Students Per Device:")
-    c.drawString(margin + 100, footer_y - 15, str(row.get("Max Users", "1 - 2")))
-    c.drawString(margin, footer_y - 30, "Computer Science Standard(s):")
-    c.setFont("Helvetica", 9)
-    c.drawString(margin, footer_y - 45, "Washington State CS Standards: Algorithms and Programming")
+    y_cursor = height - 270
 
-    def clean_price(val):
-        if isinstance(val, float):
-            return f"${val:,.2f}"
-        s = str(val).replace("$", "").strip()
-        try:
-            return f"${float(s):,.2f}"
-        except:
-            return "N/A"
-
-    single_price = clean_price(row.get("Price", "N/A"))
-    set_price = clean_price(row.get("Price per Set", "N/A"))
-
-    data = [
-        ["Price"],
-        ["Single Unit", single_price],
-        ["Classroom Set (24 students)", set_price]
+    # --- Power Table ---
+    power_data = [
+        ["Rechargeable", "Batteries Needed"],
+        [row.get("Rechargeable", "N/A"), row.get("Batteries", "N/A")]
     ]
-    table = Table(data, colWidths=[2.2 * inch, 2.2 * inch])
-    table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+    power_table = Table(power_data, colWidths=[2.5 * inch] * 2)
+    power_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
     ]))
-    table.wrapOn(c, width, height)
-    table.drawOn(c, margin, footer_y - 150)
+    power_table.wrapOn(c, width, height)
+    power_table.drawOn(c, margin, y_cursor)
 
-    # Purchase URL
+    # --- Compatibility Table ---
+    y_cursor -= 60
+    comp_data = [
+        ["Device Required", "Visual Cues", "Auditory Cues"],
+        [
+            row.get("Device Required", "N/A"),
+            row.get("Visual Accessibility", "N/A"),
+            row.get("Does the device rely on AUDITORY cues for interations and functionality?", "N/A")
+        ]
+    ]
+    comp_table = Table(comp_data, colWidths=[1.8 * inch] * 3)
+    comp_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    comp_table.wrapOn(c, width, height)
+    comp_table.drawOn(c, margin, y_cursor)
+
+    # --- Age/Grade Table ---
+    y_cursor -= 60
+    age_data = [
+        ["Min Grade Level", "Max Users"],
+        [row.get("Min Grade Level", "N/A"), row.get("Max Users", "N/A")]
+    ]
+    age_table = Table(age_data, colWidths=[2.5 * inch] * 2)
+    age_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    age_table.wrapOn(c, width, height)
+    age_table.drawOn(c, margin, y_cursor)
+
+    # --- Price Table ---
+    y_cursor -= 60
+    price_data = [
+        ["Single Unit", "Classroom Set"],
+        [
+            clean_price(row.get("Price", "N/A")),
+            clean_price(row.get("Price per Set", "N/A"))
+        ]
+    ]
+    price_table = Table(price_data, colWidths=[2.5 * inch] * 2)
+    price_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    price_table.wrapOn(c, width, height)
+    price_table.drawOn(c, margin, y_cursor)
+
+    # --- Purchase Link ---
+    y_cursor -= 60
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(margin, footer_y - 190, "More Information:")
+    c.drawString(margin, y_cursor, "More Info / Buy:")
+    c.setFont("Helvetica", 9)
     c.setFillColor(colors.blue)
-    c.drawString(margin + 110, footer_y - 190, row.get("Purchase Website", ""))
+    c.drawString(margin + 90, y_cursor, row.get("Purchase Website", ""))
     c.setFillColor(colors.black)
 
     c.save()
