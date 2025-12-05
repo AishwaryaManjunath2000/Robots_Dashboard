@@ -49,7 +49,14 @@ def generate_faq_pdf(row, filename="auto_glance.pdf"):
             img_data = requests.get(image_url, timeout=10).content
             img = Image.open(BytesIO(img_data))
             img.save(image_path)
-            c.drawImage(image_path, margin, height - 250, width=2 * inch, height=2 * inch, preserveAspectRatio=True)
+            c.drawImage(
+                image_path,
+                margin,
+                height - 250,
+                width=2 * inch,
+                height=2 * inch,
+                preserveAspectRatio=True
+            )
             os.remove(image_path)
         except Exception as e:
             print("⚠️ Image failed to load:", e)
